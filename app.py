@@ -323,5 +323,3 @@ class app(base_app):
             command_to_save += comp
         self.list_commands +=  command_to_save + '\n'
         return command_to_save
-
-  
