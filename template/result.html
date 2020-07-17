@@ -1,12 +1,22 @@
 <%include file="header.html" />
 
+<p> The input contours of the algorithm were obtained using the <i>img2freeman</i> command with following parameters:
+
+<ul>
+
+<li>  image  threshold  min <font color="blue"><i>tmin</i></font>: ${app.cfg['param']['tmin']}  </li>
+ <li>  image  threshold  max <font color="blue"><i>tmax</i></font>: ${app.cfg['param']['tmax']}
+%if app.cfg['param']['autothreshold']:
+(determined automatically by the Otsu algorithm)
+%endif
+</li>
+<li>  minimal contour size <font color="blue"><i>m</i></font>: ${app.cfg['param']['m']}  </li>
+</ul>
+</p>
+
 <p> The main algorithm was applied with the following parameters:
 <ul>
-<li>  mono-width value of tangent cover <font color="blue"><i>width</i></font>: ${app.cfg['param']['monowidth']}  </li>
-<li>  threshold of admissible angle <font color="blue"><i>alphamax</i></font>: ${app.cfg['param']['alphamax']}  </li>
-<li>  thickness of MBS for collinear test <font color="blue"><i>thickness</i></font>: ${app.cfg['param']['thicknessts']}  </li>
-<li>  ISSE tolerence approximated between segments and arc <font color="blue"><i>issetol</i></font>: ${app.cfg['param']['issetol']}  </li>
-<li>  minimal number of points on a circle <font color="blue"><i>nbpointcircle</i></font>: ${app.cfg['param']['nbpointcircle']}  </li>
+
 </ul>
 </p>
 
@@ -35,36 +45,30 @@
 
 <h2>Result</h2>
 
-<p>You can download the resulting smooth contour in  <a href="${app.work_url+'outputOutPts.svg'}">svg</a> format, or download the  <a href="${app.work_url+'inputPolygon.sdp'}">input </a> with the resulting decomposition in <a href="${app.work_url+'outputOnlyArcSeg.svg'}">svg</a>  format </p>
+<p>You can download the resulting ATC in <a href="${app.work_url+'outputATC.eps'}">eps</a> format, or download the <a href="${app.work_url+'inputPolygon.sdp'}">input</a> with the resulting polygon in <a href="${app.work_url+'outputPolygon.eps'}">eps</a> or in <a href="${app.work_url+'idDominantPoint.txt'}">text</a> format. 
+</p>
 
 
 <div class="gallery" style="height:${height}px">
   <ul class="index">
     <li>
-      <a href="${app.work_url+'input_0.png'}">input
+      <a href="${app.work_url+'input_0.png'}">input.png
 	<span>
 	  <img height="${height}" src="${app.work_url + 'input_0.png'}" alt="input" />
 	</span>
       </a>
     </li>
     <li>
-      <a href="${app.work_url+'OutPts.svg'}">smooth contours
+      <a href="${app.work_url+'outputATC.png'}">outputATC.png
 	<span>
-	  <img  height="${height}" src="${app.work_url + 'outputOutPts.png'}" alt="output smooth contour" />
+	  <img  height="${height}" src="${app.work_url + 'outputATC.png'}" alt="output ATC" />
 	</span>
       </a>
     </li>
     <li>
-      <a href="${app.work_url+'DP.svg'}">dominant points
+      <a href="${app.work_url+'outputPolygon.png'}">outputPolygon.png
 	<span>
-	  <img  height="${height}" src="${app.work_url + 'outputDP.png'}" alt="output dominant points" />
-	</span>
-      </a>
-    </li>
-    <li>
-      <a href="${app.work_url+'OnlyArcSeg.svg'}">decomposition
-	<span>
-	  <img  height="${height}" src="${app.work_url + 'outputDecomposition.png'}" alt="output decomposition" />
+	  <img  height="${height}" src="${app.work_url + 'outputPolygon.png'}" alt="output polygon" />
 	</span>
       </a>
     </li>

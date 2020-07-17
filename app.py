@@ -1,6 +1,6 @@
 """
-Demonstration:  Unsupervised Smooth Contour Detection in Arcs and Segments Decomposition
-demo editor: Phuc Ngo
+Demonstration of paper:  Adaptive Tangential Cover for Noisy Digital Contours
+demo editor: Bertrand Kerautret
 """
 
 from lib import base_app, build, http, image, config
@@ -16,12 +16,12 @@ import time
 class app(base_app):
     """ template demo app """
 
-    title = "Unsupervised Smooth Contour Detection in Arcs and Segments Decomposition: Online Demonstration"
+    title = "Adaptive Tangential Cover for Noisy Digital Contours: Online Demonstration"
     xlink_article = 'https://www.ipol.im/'
     xlink_src = 'https://www.ipol.im/pub/pre/67/gjknd_1.1.tgz'
     dgtal_src = 'https://github.com/kerautret/DGtal.git'
     demo_src_filename  = 'gjknd_1.1.tgz'
-    demo_src_dir = 'SmoothContourArcSeg_IPOLDemo'
+    demo_src_dir = 'ATC_IPOLDemo'
 
 
     input_nb = 1 # number of input images
@@ -32,7 +32,6 @@ class app(base_app):
     is_test = False       # switch to False for deployment
     commands = []
     list_commands = ""
-
 
     def __init__(self):
         """
@@ -121,11 +120,11 @@ class app(base_app):
 
         # save and validate the parameters
         try:
-            self.cfg['param']['monowidth'] = kwargs['monowidth']
-            self.cfg['param']['alphamax'] = kwargs['alphamax']
-            self.cfg['param']['thicknessts'] = kwargs['thicknessts']
-            self.cfg['param']['issetol'] = kwargs['issetol']
-            self.cfg['param']['nbpointcircle'] = kwargs['nbpointcircle']
+            self.cfg['param']['m'] = kwargs['m']
+            self.cfg['param']['tmin'] = kwargs['tmin']
+            self.cfg['param']['tmax'] = kwargs['tmax']
+            self.cfg['param']['autothreshold'] =  kwargs['thresholdtype'] == 'True'
+
             self.cfg.save()
         except ValueError:
             return self.error(errcode='badparams',
@@ -133,6 +132,7 @@ class app(base_app):
 
         http.refresh(self.base_url + 'run?key=%s' % self.key)
         return self.tmpl_out("wait.html")
+
     @cherrypy.expose
     @init_app
     def run(self):
@@ -160,13 +160,12 @@ class app(base_app):
         if self.cfg['meta']['original']:
             ar = self.make_archive()
             ar.add_file("input_0.png", "original.png", info="uploaded")
-            ar.add_file("input_0.pgm", info="input_0.pgm")
-            ar.add_file("input.txt", info="input.txt")
             ar.add_file("algoLog.txt", info="algoLog.txt")
             ar.add_file("commands.txt", info="commands.txt")
-            ar.add_file("outputOutPts.png", "outputOutPts.png", info="smooth contours")
-            ar.add_file("outputDP.png", "outputDP.png", info="dominant points")
-            ar.add_file("outputDecomposition.png", "outputDecomposition.png", info="decomposition result")
+            ar.add_file("inputPolygon.sdp", info="inputPolygon.sdp")
+            ar.add_file("idDominantPoint.txt", info="idDominantPoint.txt")
+            ar.add_file("outputATC.png", "outputATC.png", info="outputATC.png")
+            ar.add_file("outputPolygon.png", "outputPolygon.png", info="outputPolygon.png")
             ar.add_info({"version": self.cfg['param']["version"]})
             ar.save()
 
@@ -187,59 +186,94 @@ class app(base_app):
         ##  -------
         ## process 1: transform input file
         ## ---------
-        command_args = ['convert.sh', 'input_0.png', 'input_0.pgm' ]
+        command_args = ['convert.sh', 'input_0.png', 'inputNG.pgm' ]
         self.runCommand(command_args)
 
         ##  -------
-        ## process 2: extract smooth contours
+        ## process 2: extract contour files
         ## ---------
-        command_args = ['sc', 'input_0.pgm', "-p", "output.pdf", "-t", "input.txt" ]
-        self.runCommand(command_args)
+        f = open(self.work_dir+"inputPolygon.txt", "w")
+        fInfo = open(self.work_dir+"algoLog.txt", "w")
+        command_args = ['img2freeman']+\
+                       ['--minSize', str(self.cfg['param']['m'])]+\
+                       ['--sort', '-i', 'inputNG.pgm']
+                       
+        if not self.cfg['param']['autothreshold']:
+            command_args += ['-M', str(self.cfg['param']['tmax'])]+ \
+                            ['-m', str(self.cfg['param']['tmin'])]
 
-        #fInfo = open(self.work_dir+"algoLog.txt", "w")
-        #if os.path.getsize(self.work_dir+"input_0") == 0:
-        #    raise ValueError
-        #fInfo.close()
+        cmd = self.runCommand(command_args, f, fInfo, \
+                              comp = ' > inputPolygon.txt')
+
+        if os.path.getsize(self.work_dir+"inputPolygon.txt") == 0:
+            raise ValueError
+        fInfo.close()
+        fInfo = open(self.work_dir+"algoLog.txt", "r")
+
+        #Recover otsu max value from output
+        if self.cfg['param']['autothreshold']:
+            lines = fInfo.readlines()
+            line_cases = lines[0].replace(")", " ").split()
+            self.cfg['param']['tmax'] = int(line_cases[17])
+
+        singleContour = open(self.work_dir+"singleContour.fc", 'w')
+        f = open(self.work_dir+"inputPolygon.txt", "r")
+        line = f.read()
+        singleContour.write(line+"\n")
+        singleContour.close()
+        
+        f = open(self.work_dir+"inputPolygon.sdp", "w")
+        fInfo = open(self.work_dir+"algoLog.txt", "a")
+        command_args = ['freeman2sdp']+\
+                       ['-f', 'singleContour.fc']
+                       
+        
+        cmd = self.runCommand(command_args, f, fInfo, \
+                              comp = ' > inputPolygon.sdp')
+
+        f.close()
+        fInfo.close()
+
 
         ##  -------
         ## process 3: apply algorithm
         ## ---------
-        inputWidth = 512
-        inputHeight = 512
-        command_args = ['testSmoothContourDecom'] + \
-        			   [ '-i','input.txt']+ \
-                       ['--thickness', str(self.cfg['param']['monowidth'])]+ \
-                       ['--alphaMax', str(self.cfg['param']['alphamax'])]+ \
-                       ['--thicknessTS', str(self.cfg['param']['thicknessts'])]+ \
-                       ['--isseTol', str(self.cfg['param']['issetol'])]+ \
-                       ['--nbPointCircle', str(self.cfg['param']['nbpointcircle'])]
-        f = open(self.work_dir+"algoLog.txt", "w")
+        inputWidth = image(self.work_dir + 'input_0.png').size[0]
+        inputHeight = image(self.work_dir + 'input_0.png').size[1]
+        command_args = ['testMultiScaleDominantPoint'] + \
+                       [ '-i', 'inputPolygon.sdp', '-d', self.base_dir + \
+                         os.path.join('srcManual/') + os.path.join('ImaGene-forIPOL')] + \
+                       ['-e'] + ['--sourceImageWidth', str(inputWidth)]+ \
+                       ['--sourceImageHeight', str(inputHeight)]
+        f = open(self.work_dir+"algoLog.txt", "a")
         cmd = self.runCommand(command_args, None, f)
         f.close()
-        
+
 
         ## ---------
         ## process 4: converting to output result
         ## ---------
-        widthDisplay = max(inputWidth, inputHeight)
+        widthDisplay = max(inputWidth, 512)
         fInfo = open(self.work_dir+"algoLog.txt", "a")
         command_args = ['convert.sh', '-background', '#FFFFFF', '-flatten', \
-                        'OutPts.svg', '-geometry', str(widthDisplay)+"x", 'outputOutPts.png']
+                        'inputPolygonATC_Step4.eps', '-geometry', str(widthDisplay)+"x", 'outputATC.png']
         self.runCommand(command_args, None, fInfo)
-
+        shutil.copy(self.work_dir + os.path.join("inputPolygonATC_Step4.eps"), 
+                    self.work_dir + os.path.join("outputATC.eps"))
+        ## ---------
+        fInfo = open(self.work_dir+"algoLog.txt", "a")
         command_args = ['convert.sh', '-background', '#FFFFFF', '-flatten', \
-                        'DP.svg', '-geometry', str(widthDisplay)+"x", 'outputDP.png']
-        self.runCommand(command_args, None, fInfo)
+                        'inputPolygon_DPnew.eps','-geometry', str(widthDisplay)+"x", 'outputPolygon.png']
+        shutil.copy(self.work_dir + os.path.join("inputPolygon_DPnew.eps"), 
+                    self.work_dir + os.path.join("outputPolygon.eps"))
 
-        command_args = ['convert.sh', '-background', '#FFFFFF', '-flatten', \
-                        'OnlyArcSeg.svg','-geometry', str(widthDisplay)+"x", 'outputDecomposition.png']
         self.runCommand(command_args, None, fInfo)
         fInfo.close()
         
         ## ------
         # Save version num:
         fVersion = open(self.work_dir+"version.txt", "w")
-        command_args = ['testSmoothContourDecom', '--version']
+        command_args = ['testMultiScaleDominantPoint', '--version']
         self.runCommand(command_args, None, fVersion)
         fVersion.close()
         f = open(self.work_dir+"version.txt", "r")
@@ -263,7 +297,7 @@ class app(base_app):
         """
         display the algo results
         """
-        resultHeight = image(self.work_dir + 'outputOutPts.png').size[1]
+        resultHeight = image(self.work_dir + 'input_0.png').size[1]
         imageHeightResized = min (600, resultHeight)
         resultHeight = max(300, resultHeight)
         return self.tmpl_out("result.html", height=resultHeight, \
@@ -276,7 +310,7 @@ class app(base_app):
         """
         p = self.run_proc(command, stderr=stdErr, stdout=stdOut, \
                           env={'LD_LIBRARY_PATH' : self.bin_dir})
-        self.wait_proc(p, timeout=500)
+        self.wait_proc(p, timeout=self.timeout)
         index = 0
         # transform convert.sh in it classic prog command (equivalent)
         for arg in command:
